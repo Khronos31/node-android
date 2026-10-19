@@ -77,4 +77,11 @@ for module in better-sqlite3 fs-ext diskusage-ng; do
   (( count > 0 )) || { echo "No .node output for $module" >&2; exit 5; }
 done
 
+# Ship exactly the actual upstream JS wrappers alongside the native binary.
+# This lets the on-device functional smoke call production public JS APIs.
+mkdir -p "$output/js/better-sqlite3" "$output/js/fs-ext"
+cp -R "$root/node_modules/better-sqlite3/lib" "$output/js/better-sqlite3/"
+cp "$root/node_modules/fs-ext/fs-ext.js" "$output/js/fs-ext/fs-ext.js"
+echo "EPG3_UPSTREAM_JS_STAGED $abi"
+
 python3 "$root/verify-output.py" "$output" "$abi"

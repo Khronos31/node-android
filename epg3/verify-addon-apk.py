@@ -19,4 +19,13 @@ with zipfile.ZipFile(apk) as package:
         lic = f"assets/licenses/EPG3-{name}-LICENSE"
         if not package.read(lic):
             raise SystemExit("License missing in APK: " + lic)
+    for required in (
+        "assets/epg3-modules/better-sqlite3/lib/index.js",
+        "assets/epg3-modules/better-sqlite3/lib/database.js",
+        "assets/epg3-modules/better-sqlite3/lib/methods/wrappers.js",
+        "assets/epg3-modules/fs-ext/fs-ext.js",
+        "assets/epg3-functional-smoke.js",
+    ):
+        if not package.read(required):
+            raise SystemExit("Missing production JS/functional test: " + required)
 print("EPG3_LEGACY_ADDON_APK_STATIC_PASS", apk.stat().st_size)

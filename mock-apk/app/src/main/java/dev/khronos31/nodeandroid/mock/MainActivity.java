@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class MainActivity extends Activity {
-    private final Button[] buttons = new Button[4];
+    private final Button[] buttons = new Button[5];
     private TextView console;
 
     private static final String TAG = "NodeMock";
@@ -68,6 +68,10 @@ public final class MainActivity extends Activity {
         buttons[3].setText("4. EPG3 native ABI (better-sqlite3 / fs-ext)");
         root.addView(buttons[3]);
 
+        buttons[4] = new Button(this);
+        buttons[4].setText("5. EPG3 functional (SQLite/WAL/flock)");
+        root.addView(buttons[4]);
+
         console = new TextView(this);
         console.setTextSize(13);
         console.setTypeface(Typeface.MONOSPACE);
@@ -87,6 +91,7 @@ public final class MainActivity extends Activity {
         buttons[1].setOnClickListener(v -> execute("basic"));
         buttons[2].setOnClickListener(v -> execute("addon"));
         buttons[3].setOnClickListener(v -> execute("epg3"));
+        buttons[4].setOnClickListener(v -> execute("epg3-functional"));
         buttons[0].requestFocus();
     }
 
@@ -101,6 +106,60 @@ public final class MainActivity extends Activity {
             }
         }
         return dest;
+    }
+
+    private void unpackAssetTree(String assetDir, File target) throws Exception {
+        String[] children = getAssets().list(assetDir);
+        if (children == null || children.length == 0) {
+            throw new IllegalStateException("Missing asset directory: " + assetDir);
+        }
+        if (!target.isDirectory() && !target.mkdirs()) {
+            throw new IllegalStateException("Cannot create directory: " + target);
+        }
+        for (String child : children) {
+            if (child.equals(".") || child.equals("..") || child.contains("/")) {
+                throw new IllegalStateException("Unsafe asset name: " + child);
+            }
+            String assetName = assetDir + "/" + child;
+            File dst = new File(target, child);
+            String[] nested = getAssets().list(assetName);
+            if (nested != null && nested.length > 0) {
+                unpackAssetTree(assetName, dst);
+            } else {
+                try (InputStream input = getAssets().open(assetName);
+                     OutputStream output = new FileOutputStream(dst, false)) {
+                    byte[] buffer = new byte[8192];
+                    int length;
+                    while ((length = input.read(buffer)) != -1) {
+                        output.write(buffer, 0, length);
+                    }
+                }
+            }
+        }
+    }
+
+    private void linkNativeAddon(File base, String relativePath, String nativeName)
+            throws Exception {
+        File link = new File(base, relativePath);
+        File parent = link.getParentFile();
+        if (!parent.isDirectory() && !parent.mkdirs()) {
+            throw new IllegalStateException("Cannot make addon directory: " + parent);
+        }
+        link.delete();
+        Os.symlink(requireNativeLibrary(nativeName), link.getAbsolutePath());
+    }
+
+    private File prepareEpg3FunctionalModules() throws Exception {
+        // APK assets are trusted and compiled from pinned real upstream npm JS.
+        File root = new File(getFilesDir(), "epg3-modules");
+        unpackAssetTree("epg3-modules", root);
+        // Android linker loads only nativeLibraryDir copies, which have .so
+        // names. Retain .node symlink names via Node --preserve-symlinks.
+        linkNativeAddon(root, "better-sqlite3/better_sqlite3.node",
+                "libepg3_better_sqlite3.so");
+        linkNativeAddon(root, "fs-ext/build/Release/fs_ext.node",
+                "libepg3_fs_ext.so");
+        return root;
     }
 
     private String requireNativeLibrary(String filename) throws Exception {
@@ -145,6 +204,9 @@ public final class MainActivity extends Activity {
                     args.add("--version");
                 } else if ("basic".equals(kind)) {
                     args.add(saveAsset("basic-smoke.js").getAbsolutePath());
+                } else if ("epg3-functional".equals(kind)) {
+                    args.add("--preserve-symlinks");
+                    args.add(saveAsset("epg3-functional-smoke.js").getAbsolutePath());
                 } else if ("epg3".equals(kind)) {
                     // Probe the *legacy V8 C++ addon ABI*, not only Node-API.
                     args.add("--preserve-symlinks");
@@ -164,6 +226,10 @@ public final class MainActivity extends Activity {
                 builder.environment().put("NODE_DISABLE_COLORS", "1");
                 if ("addon".equals(kind)) {
                     builder.environment().put("NAPI_ADDON_PATH", prepareAddonSymlink());
+                } else if ("epg3-functional".equals(kind)) {
+                    builder.environment().put("EPG3_MODULES_ROOT",
+                            prepareEpg3FunctionalModules().getAbsolutePath());
+                    builder.environment().put("EPG3_DATA_DIR", getFilesDir().getAbsolutePath());
                 } else if ("epg3".equals(kind)) {
                     builder.environment().put("EPG3_SQLITE_NATIVE",
                             requireNativeLibrary("libepg3_better_sqlite3.so"));
@@ -202,7 +268,9 @@ public final class MainActivity extends Activity {
                 String marker = "version".equals(kind)
                         ? VERSION_MARKER
                         : ("basic".equals(kind) ? "NODE_BASIC_PASS"
-                                : ("epg3".equals(kind) ? "EPG3_LEGACY_ADDON_PASS" : "NODE_ADDON_PASS"));
+                                : ("epg3".equals(kind) ? "EPG3_LEGACY_ADDON_PASS"
+                                        : ("epg3-functional".equals(kind) ? "EPG3_FUNCTIONAL_PASS"
+                                                : "NODE_ADDON_PASS")));
                 boolean ok = exit == 0 && !timedOut.get() && text.indexOf(marker) != -1;
 
                 output = (ok ? "PASS" : "FAIL")

@@ -79,3 +79,22 @@ published as production releases.
 Android APK staging also includes the matching Android NDK r27
 `libc++_shared.so` for both ABIs; Node C++ addons may depend on it at
 runtime. The APK verifier checks the payload bytes, not merely their names.
+
+## Production-wrapper SQLite/locking functional test
+
+A fifth mock APK button, **EPG3 functional (SQLite/WAL/flock)**, now extracts
+the exact `better-sqlite3@12.11.1` and `fs-ext@2.1.1` production JS
+wrappers from the ABI-independent npm package artifacts. The JNI addons remain
+extracted in `nativeLibraryDir`; the app creates `.node` symlinks into the
+JS package tree and starts the standalone Node executable with
+`--preserve-symlinks`.
+
+The new test covers creating a file-backed SQLite database, switching to WAL,
+inserting/selecting rows, closing/reopening and reading persisted data, plus
+`fs-ext` exclusive nonblocking locks on two separately opened file descriptors.
+A returned `EPG3_FUNCTIONAL_PASS` demonstrates functional SQLite/locking, not
+merely `process.dlopen`. A failed stage is printed with its own
+`EPG3_FUNCTIONAL_FAILED` marker and stack trace.
+
+The test deliberately does not load EPGStation itself or migrate production
+SQLite files, and uses only app-private test data.

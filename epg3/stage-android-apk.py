@@ -6,7 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-src, jni, licenses = [Path(p) for p in sys.argv[1:]]
+if len(sys.argv) != 5:
+    raise SystemExit("usage: stage-android-apk.py artifacts jniLibs licenses assets")
+src, jni, licenses, assets = [Path(p) for p in sys.argv[1:]]
 pairs = {"better-sqlite3--better_sqlite3.node": "libepg3_better_sqlite3.so",
          "fs-ext--fs_ext.node": "libepg3_fs_ext.so"}
 expected = {"armeabi-v7a": ("ELF32", "ARM"),
@@ -40,3 +42,34 @@ for module in ("better-sqlite3", "fs-ext"):
     if not files:
         raise SystemExit(f"Missing license for {module}")
     shutil.copyfile(files[0], licenses / f"EPG3-{module}-LICENSE")
+
+# Stage source-package JS wrappers byte-identically from both ABI build jobs.
+# Production JS must not differ between armv7a and arm64.
+relpaths = [
+    "better-sqlite3/lib/index.js",
+    "better-sqlite3/lib/database.js",
+    "better-sqlite3/lib/util.js",
+    "better-sqlite3/lib/sqlite-error.js",
+    "fs-ext/fs-ext.js",
+]
+for abi in expected:
+    roots = list(src.rglob(f"{abi}/js"))
+    if len(roots) != 1:
+        raise SystemExit(f"Expected one {abi}/js root, got {len(roots)}")
+    root = roots[0]
+    for rel in relpaths:
+        if not (root / rel).is_file():
+            raise SystemExit(f"Missing production JS file: {abi}/{rel}")
+    if abi == "armeabi-v7a":
+        first_root = root
+    else:
+        first_files = {p.relative_to(first_root): p.read_bytes()
+                       for p in first_root.rglob("*") if p.is_file()}
+        second_files = {p.relative_to(root): p.read_bytes()
+                        for p in root.rglob("*") if p.is_file()}
+        if first_files != second_files:
+            raise SystemExit("Native job production JS wrappers differ between ABIs")
+
+out = assets / "epg3-modules"
+shutil.copytree(first_root, out, dirs_exist_ok=True)
+print("EPG3_PRODUCTION_JS_STAGED", len(first_files), "files")

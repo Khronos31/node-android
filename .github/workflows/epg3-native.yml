@@ -96,8 +96,9 @@ jobs:
           bash mock-apk/scripts/build-addon.sh
           python3 epg3/stage-android-apk.py \
             epg3/.generated/native-artifacts mock-apk/.generated/jniLibs \
-            mock-apk/.generated/assets/licenses
+            mock-apk/.generated/assets/licenses mock-apk/.generated/assets
           node --check mock-apk/tests/js/epg3-native-smoke.js
+          node --check mock-apk/tests/js/epg3-functional-smoke.js
           gradle -p mock-apk --no-daemon :app:assembleDebug
           apk=mock-apk/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$apk"
