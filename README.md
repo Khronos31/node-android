@@ -94,3 +94,18 @@ Custom scripts are MIT-licensed (see `LICENSE`). Node.js source is separately
 licensed (MIT and bundled third-party licenses); patched upstream components
 retain applicable upstream licenses. Distribute Node's official `LICENSE`
 alongside all binaries.
+
+## 16 KiB memory-page ELF layout
+
+Android 15+ devices may use 16 KiB memory pages. The standalone Node ELF
+and native test addons must have **all** `PT_LOAD` segments aligned at least
+16 KiB, with congruent offsets and virtual addresses. The build scripts
+supply explicit linker flags for the **target** GYP/Ninja binaries on NDK
+r27, and `scripts/validate_elf_pages.py` fails CI on any violating segment.
+The separately built EPGStation 3 native modules must apply the same target
+linker flags and pass the same ELF gate.
+
+This static ELF test is **not** proof of full runtime correctness on a real
+16 KiB-page device: runtime mmap/snapshot behavior and Android system
+compatibility mode must be exercised separately. Existing tag
+`v24.21.0-android.1` is not changed; a fixed build requires a new release.

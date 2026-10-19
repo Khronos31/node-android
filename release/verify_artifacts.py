@@ -7,6 +7,9 @@ import re
 import struct
 import tarfile
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from validate_elf_pages import check_bytes
 
 ABIS = {"armeabi-v7a": (1, 40), "arm64-v8a": (2, 183)}
 REPO = "Khronos31/node-android"
@@ -76,6 +79,7 @@ def validate_archive(file, abi, lock, patch_hashes):
         must(checks[path] == digest(blobs[path]),
              f"{abi}: checksum failed: {path}")
     validate_elf(blobs["bin/node"], abi)
+    check_bytes(blobs["bin/node"], f"{abi}/bin/node")
     meta = json.loads(blobs["BUILD-METADATA.json"])
     expected = {
         "node_version": lock["version"],

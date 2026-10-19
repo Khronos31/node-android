@@ -84,6 +84,10 @@ export CFLAGS="${CFLAGS:-} -I$repo/patches/stubs"
 if (( api < 28 )); then
   export CFLAGS="$CFLAGS -Daligned_alloc=memalign"
 fi
+# GYP's Ninja target toolset reads LDFLAGS; LDFLAGS_host is independent.
+# NDK r27 needs explicit target linker flags for 16 KiB PT_LOAD alignment.
+# Keep the host LLVM/V8 generators' link settings unchanged.
+export LDFLAGS="${LDFLAGS:-} -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 jobs="${NODE_ANDROID_JOBS:-4}"
 [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || { echo "NODE_ANDROID_JOBS must be positive integer" >&2; exit 2; }
 
