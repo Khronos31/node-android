@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from check_pages import check_16k
 
 if len(sys.argv) != 5:
     raise SystemExit("usage: stage-android-apk.py artifacts jniLibs licenses assets")
@@ -24,6 +25,7 @@ for abi, (cls, machine) in expected.items():
     cpp_dst = jni / abi / "libc++_shared.so"
     cpp_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(libcxx, cpp_dst)
+    check_16k(cpp_dst)
     print("EPG3_STAGE_CPP_RUNTIME_OK", abi, cpp_dst.stat().st_size)
     for pattern, name in pairs.items():
         matches = list(src.rglob(f"{abi}/{pattern}"))
@@ -32,6 +34,7 @@ for abi, (cls, machine) in expected.items():
         dest = jni / abi / name
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(matches[0], dest)
+        check_16k(dest)
         header = subprocess.check_output(["readelf", "-h", str(dest)], text=True)
         if cls not in header or machine not in header:
             raise SystemExit(f"Wrong ELF type in staged module: {dest}")

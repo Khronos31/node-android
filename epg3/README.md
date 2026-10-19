@@ -132,3 +132,20 @@ The on-device observations are documented in [PR #4](https://github.com/Khronos3
 Android, `aribts` TS processing, TypeORM's ESM integration, the actual
 EPGStation 3 server process and mirakc connectivity, and database migrations.
 No production `dtv-android` APK has been changed.
+
+## Android 16 KiB-page ELF safety
+
+Node + EPGStation dependency smoke tests on 4 KiB Android devices do **not**
+establish that the binaries load on 16 KiB-page Android. The old mock APK
+had `PT_LOAD p_align=0x1000` for `better-sqlite3` and `fs-ext`.
+These NDK r27 node-gyp builds now explicitly pass
+`-Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384`
+to the **target linker**; `epg3/check_pages.py` rejects any 4 KiB
+`PT_LOAD` or 16 KiB offset/address incongruence before packaging.
+The NDK r27 `libc++_shared.so` used in the original APK was independently
+measured to already have 16 KiB PT_LOAD alignment, and is still checked.
+The standalone Node PIE and N-API addon changes are tracked separately in
+PR #8. A fresh integrated APK must use the corrected Node binary before
+claiming that **all** native libraries are 16 KiB-aligned.
+
+This is ELF layout verification, not yet a real 16 KiB-page device test.
