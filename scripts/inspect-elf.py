@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from validate_elf_pages import check_file
 
 if len(sys.argv) != 3:
     raise SystemExit("usage: inspect-elf.py <node-binary> <armeabi-v7a|arm64-v8a>")
@@ -41,3 +42,6 @@ if extra:
 if not needed:
     raise SystemExit("No Android Bionic dependencies found; suspicious runtime ELF")
 print(f"OK: {abi}, PIE, {linker}, NEEDED={needed}")
+
+# Validate every PT_LOAD p_align and 16 KiB p_offset/p_vaddr congruence.
+check_file(binary)

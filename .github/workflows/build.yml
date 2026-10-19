@@ -24,6 +24,7 @@ jobs:
           set -euo pipefail
           for f in scripts/*.sh; do bash -n "$f"; done
           python3 -m py_compile scripts/*.py
+          python3 -m unittest discover -s tests -p 'test_elf_pages.py' -v
           node --check tests/smoke.js
           export NODE_ANDROID_WORK_DIR="$PWD/.work/source-check"
           bash scripts/fetch-source.sh
