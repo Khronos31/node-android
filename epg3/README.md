@@ -19,8 +19,10 @@ native dependencies**.
   depends on SQLite and directly compiles `src/better_sqlite3.cpp`).
   **Passing the Node-API smoke alone cannot establish compatibility.**
 - `fs-ext@2.1.1` uses NAN/V8 C++ bindings, not Node-API.
-- `diskusage-ng@1.0.4` is included in the exact dependency audit. Its
-  package build metadata is probed rather than assuming it is pure JS.
+- `diskusage-ng@1.0.4` is **pure JavaScript**. It invokes OS-provided
+  commands such as `df`; it needs an Android command/output compatibility
+  check rather than a native addon cross-build. The absence of `binding.gyp`
+  is expected.
 - `aribts` and its transitive CRC32 bindings still require an Android-specific
   dependency check, especially `@node-rs/crc32` and nested binary packages.
 
@@ -73,3 +75,7 @@ EPGStation 3 execution test.**
 The existing standalone Node/N-API mock remains separately buildable without
 these optional native libraries. Test APKs are debug-signed and must not be
 published as production releases.
+
+Android APK staging also includes the matching Android NDK r27
+`libc++_shared.so` for both ABIs; Node C++ addons may depend on it at
+runtime. The APK verifier checks the payload bytes, not merely their names.

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Stage both ABIs' real EPGStation native addon outputs into APK jniLibs."""
+import os
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,17 @@ pairs = {"better-sqlite3--better_sqlite3.node": "libepg3_better_sqlite3.so",
 expected = {"armeabi-v7a": ("ELF32", "ARM"),
             "arm64-v8a": ("ELF64", "AArch64")}
 for abi, (cls, machine) in expected.items():
+    # C++ addons may reference the Android NDK shared C++ runtime, which is
+    # not a system library. Ship the exact same pinned NDK libc++ for this ABI.
+    ndk = Path(os.environ["ANDROID_NDK_HOME"])
+    triple = "arm-linux-androideabi" if abi == "armeabi-v7a" else "aarch64-linux-android"
+    libcxx = ndk / "toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib" / triple / "libc++_shared.so"
+    if not libcxx.is_file():
+        raise SystemExit(f"Pinned NDK C++ shared runtime missing: {libcxx}")
+    cpp_dst = jni / abi / "libc++_shared.so"
+    cpp_dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(libcxx, cpp_dst)
+    print("EPG3_STAGE_CPP_RUNTIME_OK", abi, cpp_dst.stat().st_size)
     for pattern, name in pairs.items():
         matches = list(src.rglob(f"{abi}/{pattern}"))
         if len(matches) != 1:

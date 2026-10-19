@@ -8,7 +8,7 @@ from pathlib import Path
 apk, staged = Path(sys.argv[1]), Path(sys.argv[2])
 with zipfile.ZipFile(apk) as package:
     for abi in ("armeabi-v7a", "arm64-v8a"):
-        for name in ("libepg3_better_sqlite3.so", "libepg3_fs_ext.so"):
+        for name in ("libepg3_better_sqlite3.so", "libepg3_fs_ext.so", "libc++_shared.so"):
             key = f"lib/{abi}/{name}"
             raw = package.read(key)
             disk = (staged / abi / name).read_bytes()
