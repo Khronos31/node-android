@@ -1,0 +1,116 @@
+name: Cross-compile EPGStation 3 native dependencies
+
+on:
+  pull_request:
+    paths:
+      - "epg3/**"
+      - ".github/workflows/epg3-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-probe:
+    name: EPGStation beta2 native dependency / ${{ matrix.abi }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [armeabi-v7a, arm64-v8a]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.21.0"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install pinned Android NDK and build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 make binutils
+          sdkmanager --install "ndk;27.0.12077973"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk/27.0.12077973" >> "$GITHUB_ENV"
+      - name: Cross-compile actual upstream native packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash epg3/build-android-native.sh "${{ matrix.abi }}"
+      - name: Save native dependency probe artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: epgstation-beta2-native-${{ matrix.abi }}-${{ github.run_number }}
+          path: |
+            epg3/.generated/output/${{ matrix.abi }}
+            epg3/package-lock.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  mock-legacy-apk:
+    name: Standalone Node 24 + EPGStation v3 legacy addons APK
+    needs: native-probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "7.6.4"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android platform, build tools and NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "ndk;27.0.12077973"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk/27.0.12077973" >> "$GITHUB_ENV"
+      - name: Retrieve own two-ABI Node 24.21.0 build
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 39220534794
+          pattern: node-v24.21.0-android-*
+          merge-multiple: false
+          path: mock-apk/.generated/run-artifacts
+          github-token: ${{ github.token }}
+      - name: Retrieve actual EPGStation 3 native package binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: epgstation-beta2-native-*
+          merge-multiple: false
+          path: epg3/.generated/native-artifacts
+      - name: Assemble independently-built native addon test APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 mock-apk/scripts/stage-runtime.py --source run-artifacts --run-id 39220534794
+          bash mock-apk/scripts/build-addon.sh
+          python3 epg3/stage-android-apk.py \
+            epg3/.generated/native-artifacts mock-apk/.generated/jniLibs \
+            mock-apk/.generated/assets/licenses mock-apk/.generated/assets
+          node --check mock-apk/tests/js/epg3-native-smoke.js
+          node --check mock-apk/tests/js/epg3-functional-smoke.js
+          gradle -p mock-apk --no-daemon :app:assembleDebug
+          apk=mock-apk/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$apk"
+          python3 mock-apk/scripts/verify-apk.py "$apk"
+          python3 epg3/verify-addon-apk.py "$apk" mock-apk/.generated/jniLibs
+          mkdir -p epg3/.generated/apk
+          cp "$apk" epg3/.generated/apk/node24-epg3-legacy-addons-debug.apk
+          cp mock-apk/.generated/assets/runtime-origin.json epg3/.generated/apk/
+          (cd epg3/.generated/apk && sha256sum *.apk > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node24-epg3-legacy-mock-${{ github.run_number }}
+          path: epg3/.generated/apk/
+          if-no-files-found: error
+          retention-days: 14
