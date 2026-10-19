@@ -11,7 +11,8 @@ from pathlib import Path
 ABIS = {"armeabi-v7a": (1, 40), "arm64-v8a": (2, 183)}
 REPO = "Khronos31/node-android"
 FILES = ("bin/node", "LICENSE", "BUILD-METADATA.json")
-MEMBERS = {"./", "./bin/", "./bin/node", "./LICENSE",
+# Python tarfile normalizes directory names, stripping trailing slashes.
+MEMBERS = {".", "./bin", "./bin/node", "./LICENSE",
            "./BUILD-METADATA.json", "./SHA256SUMS"}
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 
@@ -103,11 +104,13 @@ def validate_archive(file, abi, lock, patch_hashes):
     }
 
 
-def promote(repo, assets, run, run_id, tag, commit):
+def promote(repo, assets, run, run_id, tag, commit, tool_commit):
     lock = json.loads((repo / "versions/node-24.json").read_text())
     must(re.fullmatch(rf"v{re.escape(lock['version'])}-android\.[1-9][0-9]*",
                       tag) is not None, "Invalid pinned Node Android tag")
     must(SHA.fullmatch(commit) is not None, "Invalid release tag commit")
+    must(SHA.fullmatch(tool_commit) is not None,
+         "Invalid promotion workflow checkout commit")
     head = validate_run(run, run_id)
     patches = {p.name: digest(p.read_bytes())
                for p in sorted((repo / "patches/node-24").glob("*.patch"))}
@@ -124,6 +127,7 @@ def promote(repo, assets, run, run_id, tag, commit):
          "Binary archives were built against different CI checkouts")
     provenance = {
         "release_tag": tag, "release_commit": commit,
+        "promotion_workflow_commit": tool_commit,
         "node_version": lock["version"],
         "android_api_min": lock["android_api"],
         "ndk_version": lock["ndk_version"],
@@ -156,9 +160,10 @@ def main():
     ap.add_argument("--run-id", type=int, required=True)
     ap.add_argument("--tag", required=True)
     ap.add_argument("--release-commit", required=True)
+    ap.add_argument("--tool-commit", required=True)
     a = ap.parse_args()
     promote(a.repo_root, a.assets, json.loads(a.run_json.read_text()),
-            a.run_id, a.tag, a.release_commit)
+            a.run_id, a.tag, a.release_commit, a.tool_commit)
 
 
 if __name__ == "__main__":

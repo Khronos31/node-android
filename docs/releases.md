@@ -33,10 +33,14 @@ directory and attempt to execute it on modern Android. npm is not bundled.
 ## Controlled publication
 
 [Release promotion](../.github/workflows/release.yml) is a **manually
-dispatched** and tag-gated action. It reuses reviewed successful two-ABI CI
+dispatched** and tag-gated action run from `main` after the tag exists. It reuses reviewed successful two-ABI CI
 archives **without recompiling**. It refuses to publish when:
 
-- The dispatch is not on the matching existing release tag.
+- The dispatch is not on the repository's `main` branch, the named tag
+  does not exist, or the tag commit is not an ancestor of `main`.
+- The tagged build inputs and patch scripts differ from the promotion
+  workflow checkout. (The release verification tool itself can be fixed
+  without moving an already-created, unpublished tag.)
 - The CI run was not successful or is not this repository's Node build.
 - The build source HEAD is not an ancestor of the release tag.
 - Either ABI archive is missing or extra archives appear.
@@ -45,8 +49,9 @@ archives **without recompiling**. It refuses to publish when:
 - The tag has an existing GitHub Release.
 
 The resulting `RELEASE-METADATA.json` distinguishes the build run's source
-checkout from the release tag commit, rather than claiming it was compiled
-from the tag if the CI build came from the earlier PR checkout.
+checkout, the **immutable release tag commit** and the **promotion workflow
+checkout**. It never claims that the binary was recompiled from the tag
+or that a verification-tool fix changed the release's source inputs.
 
 **Initial candidate:** source build workflow run `39240791051`,
 feature source head `86d74118b9e8d851a00fe96ad8bb74ed90903e9c`
