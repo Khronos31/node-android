@@ -35,6 +35,9 @@ jobs:
 
   build:
     needs: source-and-patches
+    # This is a stacked PR onto the existing long-running Node build PR.
+    # Validate the cache plan without launching a duplicate multi-hour build.
+    if: ${{ github.event_name != 'pull_request' || github.base_ref != 'feat/node24-android-build' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     strategy:
@@ -46,7 +49,7 @@ jobs:
       - name: Install host toolchain prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build xz-utils patch gcc-multilib g++-multilib
+          sudo apt-get install -y ninja-build xz-utils patch ccache gcc-multilib g++-multilib
       - uses: android-actions/setup-android@v3
         with:
           # sdkmanager's old 'tools' package was removed; avoid the action default.
@@ -55,12 +58,72 @@ jobs:
         run: |
           sdkmanager --install "ndk;27.0.12077973"
           echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT:-$ANDROID_HOME}/ndk/27.0.12077973" >> "$GITHUB_ENV"
+      # Cache host LLVM by Node source pin and ABI-specific workspace path.
+      # The download script verifies the SHA-256 on initial download.
+      - name: Restore V8 host LLVM
+        id: llvm-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .work/${{ matrix.abi }}/llvm-host
+          key: node24-llvm-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.abi }}-${{ hashFiles('versions/node-24.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            node24-llvm-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.abi }}-${{ hashFiles('versions/node-24.json') }}-
+
+      # Restore compiler results, NOT entire V8/Ninja out directories.
+      # A rolling per-attempt key ensures partial progress from failed builds
+      # is saved; same-version later runs can restore the newest prefix match.
+      - name: Restore ABI-isolated ccache
+        id: ccache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache/${{ matrix.abi }}
+          key: node24-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.abi }}-${{ hashFiles('versions/node-24.json', 'patches/node-24/*.patch', 'patches/stubs/*', 'scripts/build.sh', 'scripts/adjust-node-gyp.py', 'scripts/prepare-host-llvm.sh') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            node24-ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ matrix.abi }}-${{ hashFiles('versions/node-24.json', 'patches/node-24/*.patch', 'patches/stubs/*', 'scripts/build.sh', 'scripts/adjust-node-gyp.py', 'scripts/prepare-host-llvm.sh') }}-
+
       - name: Build and inspect Android Node PIE
+        id: node-build
         env:
           NODE_ANDROID_JOBS: "2"
+          NODE_ANDROID_USE_CCACHE: "1"
+          CCACHE_DIR: ${{ github.workspace }}/.ccache/${{ matrix.abi }}
+          CCACHE_BASEDIR: ${{ github.workspace }}
+          CCACHE_COMPILERCHECK: content
+          CCACHE_MAXSIZE: 1500M
+          CCACHE_COMPRESS: "true"
         run: |
           chmod +x scripts/*.sh
           bash scripts/build.sh "${{ matrix.abi }}"
+
+      - name: Report cache statistics and presence
+        id: cache-check
+        if: ${{ !cancelled() && steps.node-build.outcome != 'skipped' }}
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache/${{ matrix.abi }}
+        run: |
+          ccache --show-stats || true
+          du -sh "$CCACHE_DIR" 2>/dev/null || true
+          if [[ -d "$CCACHE_DIR" && -n "$(ls -A "$CCACHE_DIR")" ]]; then
+            echo "ccache_present=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [[ -x ".work/${{ matrix.abi }}/llvm-host/bin/clang" ]]; then
+            echo "llvm_present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save compiler cache, including partial failed builds
+        if: ${{ !cancelled() && steps.cache-check.outputs.ccache_present == 'true' && steps.ccache-restore.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache/${{ matrix.abi }}
+          key: ${{ steps.ccache-restore.outputs.cache-primary-key }}
+
+      - name: Save pinned host LLVM
+        if: ${{ !cancelled() && steps.cache-check.outputs.llvm_present == 'true' && steps.llvm-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .work/${{ matrix.abi }}/llvm-host
+          key: ${{ steps.llvm-cache.outputs.cache-primary-key }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: node-v24.21.0-android-${{ matrix.abi }}

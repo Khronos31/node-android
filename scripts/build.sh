@@ -57,6 +57,28 @@ export CXX_host="$llvm_host/bin/clang++$host_m32"
 export LINK_host="$llvm_host/bin/clang++$host_m32"
 export PATH="$toolchain:$PATH"
 export GYP_DEFINES="target_arch=$arch v8_target_arch=$arch android_target_arch=$arch host_os=linux OS=android android_ndk_path=$ndk"
+
+# CI cache acceleration: optionally wrap both the Android NDK target compiler
+# and V8's pinned host LLVM compiler with ccache. Leave this opt-in to avoid
+# altering local builds, and let ccache validate compiler/input changes.
+# Do not attempt to cache ABI-dependent Ninja objects from another target.
+if [[ "${NODE_ANDROID_USE_CCACHE:-0}" == "1" ]]; then
+  command -v ccache >/dev/null || {
+    echo "NODE_ANDROID_USE_CCACHE=1 requires ccache in PATH" >&2; exit 2;
+  }
+  export CCACHE_DIR="${CCACHE_DIR:-$repo/.ccache/$abi}"
+  export CCACHE_BASEDIR="${CCACHE_BASEDIR:-$repo}"
+  export CCACHE_COMPILERCHECK="${CCACHE_COMPILERCHECK:-content}"
+  export CCACHE_COMPRESS="${CCACHE_COMPRESS:-true}"
+  export CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-1500M}"
+  mkdir -p "$CCACHE_DIR"
+  export CC="ccache $CC"
+  export CXX="ccache $CXX"
+  export CC_host="ccache $CC_host"
+  export CXX_host="ccache $CXX_host"
+  export LINK_host="$llvm_host/bin/clang++$host_m32"
+  echo "ccache enabled: $CCACHE_DIR (ABI $abi; limit $CCACHE_MAXSIZE)"
+fi
 export CFLAGS="${CFLAGS:-} -I$repo/patches/stubs"
 # Android API 24-27 lacks aligned_alloc; Node's cctest path uses it.
 if (( api < 28 )); then
