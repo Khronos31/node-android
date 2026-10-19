@@ -52,7 +52,7 @@ mkdir -p "$output"
 for module in better-sqlite3 fs-ext diskusage-ng; do
   dir="$root/node_modules/$module"
   [[ -d "$dir" ]] || { echo "Missing installed package: $module" >&2; exit 4; }
-  license="$(find "$dir" -maxdepth 1 -type f \\( -iname 'license' -o -iname 'license.*' \\) -print -quit)"
+  license="$(find "$dir" -maxdepth 1 -type f \( -iname 'license' -o -iname 'license.*' \) -print -quit)"
   if [[ -n "$license" ]]; then
     cp "$license" "$output/$module.LICENSE"
   fi
