@@ -17,7 +17,10 @@ whether `require("... .node")` succeeds with a standalone Android PIE Node.
 | Basic JS smoke | fs, SHA-256 crypto, local HTTP, child_process spawn | `NODE_BASIC_PASS` |
 | Node-API addon | native `.node` load, N-API registration, C callback and value conversion | `NODE_ADDON_PASS` |
 
-Each test shows stdout/stderr and its **exit code**. In particular, a failed
+Each test shows stdout/stderr and its **exit code**. The addon test also
+prints `addon.realpath` and `addon.resolved`; the latter **must end in
+`.node`**. If it ends in `.so`, a `SyntaxError` is a module resolution error,
+not evidence of missing N-API exports. In particular, a failed
 N-API test is useful evidence: Android's native dynamic linker may not expose
 `napi_*` symbols from a standalone Node PIE to a dlopened addon. A successful
 `node --version` alone does not prove addon compatibility.
@@ -32,6 +35,10 @@ N-API test is useful evidence: Android's native dynamic linker may not expose
 - Java creates an app-private **symbolic link** `napi-smoke.node` to the
   executable-native-libraries directory; the addon itself remains in
   `nativeLibraryDir` (no `dlopen` from writable app data)
+- The addon test passes **`--preserve-symlinks`** before the JS entry point.
+  Otherwise Node's CommonJS resolver canonicalizes the symlink to
+  `libnapi_smoke.so` and tries to parse the ELF as JavaScript instead of
+  invoking the `.node` native addon loader
 - `android:extractNativeLibs="true"` and legacy native lib packaging enabled
 - A test-only Node build from **official Node.js v24.21.0** source is used to
   compile the Node-API addon, with official source SHA-256 verification.
@@ -87,7 +94,10 @@ This produces a debug-signed APK. It is not a production-signed Android build.
 ## On-device validation
 
 ```bash
-adb install -r mock-apk/app/build/outputs/apk/debug/app-debug.apk
+# GitHub's ephemeral debug signing key changes across CI runs:
+# Remove a previously installed mock before installing a new CI APK.
+adb uninstall dev.khronos31.nodeandroid.mock || true
+adb install mock-apk/app/build/outputs/apk/debug/app-debug.apk
 adb shell getprop ro.product.cpu.abi
 adb shell getprop ro.build.version.sdk
 adb logcat -d -s NodeMock:I AndroidRuntime:E linker:E

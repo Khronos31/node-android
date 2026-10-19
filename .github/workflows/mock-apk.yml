@@ -42,6 +42,8 @@ jobs:
           set -euo pipefail
           node --check mock-apk/tests/js/basic-smoke.js
           node --check mock-apk/tests/js/native-addon-smoke.js
+          node mock-apk/tests/js/symlink-resolve-smoke.cjs
+          node --preserve-symlinks mock-apk/tests/js/symlink-resolve-smoke.cjs
           python3 -m py_compile mock-apk/scripts/*.py
           bash -n mock-apk/scripts/build-addon.sh
           if [[ "$RUNTIME_SOURCE" == "run-artifacts" ]]; then

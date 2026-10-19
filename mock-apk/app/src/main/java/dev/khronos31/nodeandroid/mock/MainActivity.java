@@ -133,6 +133,9 @@ public final class MainActivity extends Activity {
                 } else if ("basic".equals(kind)) {
                     args.add(saveAsset("basic-smoke.js").getAbsolutePath());
                 } else {
+                    // CJS normally dereferences napi-smoke.node -> libnapi_smoke.so.
+                    // Keep the .node extension so Node uses its native addon loader.
+                    args.add("--preserve-symlinks");
                     args.add(saveAsset("native-addon-smoke.js").getAbsolutePath());
                 }
 
