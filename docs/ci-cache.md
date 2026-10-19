@@ -22,6 +22,20 @@ rebuilds. Here we wrap **Android NDK Clang and the pinned V8 host LLVM Clang**,
 while retaining the original link commands. `ccache` verifies the actual
 compiler contents and inputs; it is not an uncontrolled reuse of binaries.
 
+## Build parallelism
+
+With the public-repository Ubuntu x64 GitHub-hosted runner's **4 vCPUs / 16 GB
+RAM**, CI now uses `NODE_ANDROID_JOBS=4` (`ninja -j4`). Each Android ABI
+gets a separate runner and its own memory allocation; the two concurrent
+matrix jobs do not share one 16 GB limit.
+
+This is a **proposed default**, not yet benchmarked. V8 C++ compilation can
+occasionally peak in memory usage; if the job exits with SIGKILL/137/OOM,
+reduce the job count to 3 and compare performance. Each run logs CPU/memory
+and filesystem capacity immediately before compilation.
+
+Local builds can override `NODE_ANDROID_JOBS` to fit their hardware.
+
 ## Cache lifetime / failures
 
 - `actions/cache/restore@v4` runs **before** compilation.

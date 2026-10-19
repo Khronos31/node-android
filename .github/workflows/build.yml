@@ -84,7 +84,7 @@ jobs:
       - name: Build and inspect Android Node PIE
         id: node-build
         env:
-          NODE_ANDROID_JOBS: "2"
+          NODE_ANDROID_JOBS: "4"
           NODE_ANDROID_USE_CCACHE: "1"
           CCACHE_DIR: ${{ github.workspace }}/.ccache/${{ matrix.abi }}
           CCACHE_BASEDIR: ${{ github.workspace }}
@@ -93,6 +93,9 @@ jobs:
           CCACHE_COMPRESS: "true"
         run: |
           chmod +x scripts/*.sh
+          echo "Parallel jobs=$NODE_ANDROID_JOBS / CPUs=$(nproc)"
+          free -h
+          df -h .
           bash scripts/build.sh "${{ matrix.abi }}"
 
       - name: Report cache statistics and presence

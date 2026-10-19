@@ -84,7 +84,7 @@ export CFLAGS="${CFLAGS:-} -I$repo/patches/stubs"
 if (( api < 28 )); then
   export CFLAGS="$CFLAGS -Daligned_alloc=memalign"
 fi
-jobs="${NODE_ANDROID_JOBS:-2}"
+jobs="${NODE_ANDROID_JOBS:-4}"
 [[ "$jobs" =~ ^[1-9][0-9]*$ ]] || { echo "NODE_ANDROID_JOBS must be positive integer" >&2; exit 2; }
 
 echo "Building official Node.js v$version for $abi (API $api, NDK $ndk_version, jobs=$jobs)"
