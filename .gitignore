@@ -1,0 +1,9 @@
+.work/
+dist/
+out/
+*.tar.xz
+*.tar.gz
+*.apk
+*.tmp
+__pycache__/
+.DS_Store
