@@ -77,7 +77,7 @@ jobs:
       - name: Retrieve own two-ABI Node 24.21.0 build
         uses: actions/download-artifact@v4
         with:
-          run-id: 39220534794
+          run-id: 39308014802
           pattern: node-v24.21.0-android-*
           merge-multiple: false
           path: mock-apk/.generated/run-artifacts
@@ -92,7 +92,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 mock-apk/scripts/stage-runtime.py --source run-artifacts --run-id 39220534794
+          python3 mock-apk/scripts/stage-runtime.py --source run-artifacts --run-id 39308014802
           bash mock-apk/scripts/build-addon.sh
           python3 epg3/stage-android-apk.py \
             epg3/.generated/native-artifacts mock-apk/.generated/jniLibs \

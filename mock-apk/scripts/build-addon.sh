@@ -23,6 +23,7 @@ for spec in \
     "$toolchain/clang" --target="$target" \
       -std=c11 -O2 -Wall -Wextra -Werror -fPIC -fvisibility=hidden -shared \
       -Wl,-soname,libnapi_smoke.so \
+      -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 \
       -I"$root/.generated/node-headers" \
       "$root/tests/native-addon/addon.c" -o "$dst"
 
@@ -35,5 +36,6 @@ for spec in \
     readelf -W --dyn-syms "$dst" | grep -q "napi_create_function" || {
       echo "Expected unresolved Node-API import missing: $abi" >&2; exit 3;
     }
+    python3 "$root/../scripts/validate_elf_pages.py" "$dst"
     echo "ADDON_OK $abi: $(sha256sum "$dst")"
 done
