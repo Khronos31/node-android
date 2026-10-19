@@ -15,6 +15,7 @@ for p in "${patches[@]}"; do
   elif patch -d "$src" -p1 --fuzz=0 --batch --reverse --dry-run -i "$p" >/dev/null 2>&1; then
     echo "  already applied; no change"
   else
+    patch -d "$src" -p1 --fuzz=0 --batch --forward --dry-run -i "$p" >&2 || :
     echo "ERROR: patch does not match Node source: $p" >&2
     exit 3
   fi
