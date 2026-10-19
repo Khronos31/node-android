@@ -25,7 +25,10 @@ for abi, (cls, machine) in expected.items():
     cpp_dst = jni / abi / "libc++_shared.so"
     cpp_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(libcxx, cpp_dst)
-    check_16k(cpp_dst)
+    # Android 16 KiB page devices use 64-bit ABIs. NDK r27 bundles a
+    # 16 KiB-aligned arm64 libc++, but the 32-bit armv7 libc++ uses 4 KiB.
+    if abi == "arm64-v8a":
+        check_16k(cpp_dst)
     print("EPG3_STAGE_CPP_RUNTIME_OK", abi, cpp_dst.stat().st_size)
     for pattern, name in pairs.items():
         matches = list(src.rglob(f"{abi}/{pattern}"))
