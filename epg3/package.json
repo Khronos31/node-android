@@ -1,0 +1,15 @@
+{
+  "name": "node-android-epgstation3-native-probe",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Build-probe for EPGStation 3.0.0-beta2 native dependencies",
+  "engines": {"node": ">=24"},
+  "dependencies": {
+    "better-sqlite3": "12.11.1",
+    "fs-ext": "2.1.1",
+    "diskusage-ng": "1.0.4"
+  },
+  "devDependencies": {
+    "node-gyp": "11.5.0"
+  }
+}
