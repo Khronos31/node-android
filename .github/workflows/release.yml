@@ -1,0 +1,111 @@
+name: Promote verified Node Android binary release
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "release/**"
+      - "docs/releases.md"
+      - "README.md"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag (e.g. v24.21.0-android.1)"
+        required: true
+        type: string
+      build_run_id:
+        description: "Successful two-ABI Node Android workflow run ID"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-release-scripts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit-test release validation
+        run: |
+          set -euo pipefail
+          python3 -m py_compile release/verify_artifacts.py
+          python3 -m unittest discover -s release/tests -p 'test_*.py' -v
+
+  publish:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    needs: validate-release-scripts
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify immutable tag dispatch
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = "tag"
+          test "$GITHUB_REF_NAME" = "$INPUT_TAG"
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]]
+          test "$(git rev-parse "refs/tags/$INPUT_TAG^{commit}")" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+      - name: Validate successful source build and ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/source-run.json"
+          RUN_HEAD="$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["id"] == int(sys.argv[2]); assert r["status"] == "completed" and r["conclusion"] == "success"; assert r["name"] == "Build Node.js for Android"; assert r["repository"]["full_name"] == "Khronos31/node-android"; print(r["head_sha"])' "$RUNNER_TEMP/source-run.json" "$RUN_ID")"
+          git merge-base --is-ancestor "$RUN_HEAD" "$GITHUB_SHA" || {
+            echo "::error::Build head must be an ancestor of release tag"
+            exit 2
+          }
+      - name: Download pinned binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.build_run_id }}
+          pattern: node-v24.21.0-android-*
+          merge-multiple: true
+          path: release-assets
+          github-token: ${{ github.token }}
+      - name: Validate exact archives and create provenance
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RUN_ID: ${{ inputs.build_run_id }}
+        run: |
+          set -euo pipefail
+          python3 release/verify_artifacts.py \
+            --repo-root . \
+            --assets release-assets \
+            --run-json "$RUNNER_TEMP/source-run.json" \
+            --run-id "$RUN_ID" \
+            --tag "$INPUT_TAG" \
+            --release-commit "$GITHUB_SHA"
+          (cd release-assets && sha256sum -c SHA256SUMS)
+      - name: Publish first Android port pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$INPUT_TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::A release already exists for this tag"
+            exit 3
+          fi
+          gh release create "$INPUT_TAG" \
+            release-assets/node-v24.21.0-android-armeabi-v7a.tar.xz \
+            release-assets/node-v24.21.0-android-arm64-v8a.tar.xz \
+            release-assets/SHA256SUMS \
+            release-assets/RELEASE-METADATA.json \
+            -R "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "Node.js 24.21.0 for Android (port build 1)" \
+            --notes-file release/NOTES.md \
+            --prerelease \
+            --latest=false

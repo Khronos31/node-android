@@ -7,10 +7,11 @@ This repository is independent of both Node.js upstream and the Android
 application [dtv-android](https://github.com/Khronos31/dtv-android). No
 `nodejs-mobile` framework or Termux installation is required at runtime.
 
-> **State:** First implementation / validation pending. Source download,
-> patching, cross-build scripts and CI are provided. Do **not** treat an
-> untested CI output as a supported binary release. The previous smoke-tested
-> APK used third-party prebuilt Node 24.21.0, not this repository's output.
+> **State:** Own-source-built Node.js 24.21.0 has passed real Android device
+> tests on **both** ABIs: standalone process, basic JS, N-API and V8 addons,
+> and selected EPGStation 3 beta2 package functions. The final ccache/-j4
+> binaries have passed build/ELF CI but not byte-for-byte device retesting;
+> the first permanent GitHub binary release is therefore a **pre-release**.
 
 ## Build target
 
@@ -48,7 +49,10 @@ You can also run the
 [Build Node.js for Android](.github/workflows/build.yml) GitHub Actions workflow
 through `workflow_dispatch` (or by opening a pull request); it compiles and
 uploads both ABI archives as **workflow artifacts**, not GitHub Releases.
-No automatic release is performed before runtime testing.
+Binary releases are promoted through a separate, tag-gated
+[release workflow](.github/workflows/release.yml), which verifies both CI
+archives, source and patch hashes, and release provenance without rebuilding
+Node. See [Binary releases](docs/releases.md).
 
 ## Package contract
 
@@ -59,6 +63,10 @@ The executable is intended to be renamed to e.g.
 Android's `ApplicationInfo.nativeLibraryDir` using `ProcessBuilder`.
 Do **not** copy executable files to writable Android `filesDir` and try to
 execute them on modern Android.
+
+Consumers such as `dtv-android` should download a pinned, versioned
+[GitHub Release](https://github.com/Khronos31/node-android/releases),
+verify its published `SHA256SUMS` and keep Node's `LICENSE`.
 
 After verifying each ABI on actual devices, `dtv-android` should consume a
 fixed-version archive with SHA-256 verification. APK generation, EPGStation,
@@ -71,8 +79,12 @@ native addon builds and lifecycle supervision stay in `dtv-android`.
 - The JS script at [`tests/smoke.js`](tests/smoke.js) is for on-device testing.
 - Passing ELF checks **does not** confirm on-device JIT, `dlopen` of native
   Node addons, V8 snapshots, lifecycle behavior, or EPGStation v3 compatibility.
-- First milestone: reproduce the working Node.js 24.21.0 mock with our own
-  independently compiled binaries, then compare both ABIs on devices.
+- **Verified on real devices (both ABIs):** our own Node 24.21.0 runtime,
+  basic JS, Node-API, V8-native addons, SQLite/WAL/locking, `aribts` CRC32
+  and `diskusage-ng` capacity lookup.
+- **Not yet verified:** complete EPGStation 3 boot, database migration,
+  lifecycle supervision or mirakc/recording integration; individual
+  ccache/-j4 release archive bytes have not had separate on-device retesting.
 
 See [patch-policy](docs/patch-policy.md) for patch licensing and provenance.
 
