@@ -23,8 +23,14 @@ native dependencies**.
   commands such as `df`; it needs an Android command/output compatibility
   check rather than a native addon cross-build. The absence of `binding.gyp`
   is expected.
-- `aribts` and its transitive CRC32 bindings still require an Android-specific
-  dependency check, especially `@node-rs/crc32` and nested binary packages.
+- EPGStation 3.0.0-beta2 actually pins **`aribts@2.1.12`** (from
+  `rndomhack/node-aribts`), which contains a JavaScript CRC32 implementation
+  (`lib/crc32.js`) and depends on `crc@^3.4.4`. It does **not**
+  depend on `@node-rs/crc32`. That Rust addon was relevant to the earlier
+  EPGStation 2 payload, **not** this EPGStation 3 snapshot. Even though
+  `aribts` declares `nan` as a dependency, the upstream package has no
+  `binding.gyp` or native `.node` module; TS parsing is still untested on
+  Android.
 
 ## What this PR runs
 
@@ -98,3 +104,31 @@ merely `process.dlopen`. A failed stage is printed with its own
 
 The test deliberately does not load EPGStation itself or migrate production
 SQLite files, and uses only app-private test data.
+
+## Real-device acceptance (2026-10-19)
+
+**Both Android ABIs passed all five stand-alone runtime and dependency tests**
+using our independently built Node 24.21.0 and EPGStation 3 beta2 package
+versions:
+
+| Test | armeabi-v7a | arm64-v8a |
+| --- | --- | --- |
+| Node v24 startup | PASS | PASS |
+| fs, crypto, child_process, HTTP loopback | PASS | PASS |
+| N-API native addon | PASS | PASS |
+| Native V8 addon load: better-sqlite3, fs-ext | PASS | PASS |
+| Real package JS API: SQLite SQL/WAL/reopen and flock | **PASS** | **PASS** |
+
+The fifth test printed
+`EPG3_SQLITE_SQL_PASS`,
+`EPG3_SQLITE_WAL_REOPEN_PASS`,
+`EPG3_FSEXT_FLOCK_PASS`, and
+`EPG3_FUNCTIONAL_PASS` for **both** architectures.
+
+Successful APK build: [GitHub Actions 39247276126](https://github.com/Khronos31/node-android/actions/runs/39247276126).
+The on-device observations are documented in [PR #4](https://github.com/Khronos31/node-android/pull/4).
+
+**Unverified:** `diskusage-ng` process execution / `df` output format on
+Android, `aribts` TS processing, TypeORM's ESM integration, the actual
+EPGStation 3 server process and mirakc connectivity, and database migrations.
+No production `dtv-android` APK has been changed.
