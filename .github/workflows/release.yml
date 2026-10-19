@@ -43,16 +43,30 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify immutable tag dispatch
+      - name: Verify immutable existing tag from default branch
         env:
           INPUT_TAG: ${{ inputs.tag }}
           RUN_ID: ${{ inputs.build_run_id }}
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_TYPE" = "tag"
-          test "$GITHUB_REF_NAME" = "$INPUT_TAG"
+          test "$GITHUB_REF" = "refs/heads/main"
           [[ "$RUN_ID" =~ ^[0-9]+$ ]]
-          test "$(git rev-parse "refs/tags/$INPUT_TAG^{commit}")" = "$GITHUB_SHA"
+          TAG_COMMIT="$(git rev-parse --verify "refs/tags/$INPUT_TAG^{commit}")"
+          git merge-base --is-ancestor "$TAG_COMMIT" "$GITHUB_SHA" || {
+            echo "::error::Release tag commit is not an ancestor of main"
+            exit 2
+          }
+          # The release tooling may have been fixed since tagging, but inputs
+          # controlling the binary output must be byte-identical to the tag.
+          git diff --quiet "$TAG_COMMIT" "$GITHUB_SHA" -- \
+            versions/node-24.json patches/ scripts/build.sh \
+            scripts/fetch-source.sh scripts/apply-patches.sh \
+            scripts/prepare-host-llvm.sh scripts/adjust-node-gyp.py \
+            scripts/inspect-elf.py || {
+              echo "::error::Build source/toolchain fingerprint drift since tag"
+              exit 2
+            }
+          echo "TAG_COMMIT=$TAG_COMMIT" >> "$GITHUB_ENV"
           test -z "$(git status --porcelain)"
       - name: Validate successful source build and ancestry
         env:
@@ -62,7 +76,7 @@ jobs:
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" > "$RUNNER_TEMP/source-run.json"
           RUN_HEAD="$(python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["id"] == int(sys.argv[2]); assert r["status"] == "completed" and r["conclusion"] == "success"; assert r["name"] == "Build Node.js for Android"; assert r["repository"]["full_name"] == "Khronos31/node-android"; print(r["head_sha"])' "$RUNNER_TEMP/source-run.json" "$RUN_ID")"
-          git merge-base --is-ancestor "$RUN_HEAD" "$GITHUB_SHA" || {
+          git merge-base --is-ancestor "$RUN_HEAD" "$TAG_COMMIT" || {
             echo "::error::Build head must be an ancestor of release tag"
             exit 2
           }
@@ -86,7 +100,8 @@ jobs:
             --run-json "$RUNNER_TEMP/source-run.json" \
             --run-id "$RUN_ID" \
             --tag "$INPUT_TAG" \
-            --release-commit "$GITHUB_SHA"
+            --release-commit "$TAG_COMMIT" \
+            --tool-commit "$GITHUB_SHA"
           (cd release-assets && sha256sum -c SHA256SUMS)
       - name: Publish first Android port pre-release
         env:

@@ -1,4 +1,6 @@
 import importlib.util
+import tarfile
+import tempfile
 from pathlib import Path
 import unittest
 
@@ -9,6 +11,20 @@ spec.loader.exec_module(module)
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_tarfile_normalizes_directory_members(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            archive = Path(tmp) / "sample.tar.xz"
+            with tarfile.open(archive, "w:xz") as tf:
+                for name in ("./", "./bin/"):
+                    member = tarfile.TarInfo(name)
+                    member.type = tarfile.DIRTYPE
+                    tf.addfile(member)
+            with tarfile.open(archive, "r:xz") as tf:
+                self.assertEqual([m.name for m in tf.getmembers()],
+                                 [".", "./bin"])
+        self.assertIn(".", module.MEMBERS)
+        self.assertIn("./bin", module.MEMBERS)
+
     def test_elf_class_machine_and_type(self):
         for abi, (cls, machine) in module.ABIS.items():
             data = bytearray(32)
