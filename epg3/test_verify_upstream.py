@@ -9,7 +9,7 @@ class TestPinnedManifest(unittest.TestCase):
     def setUp(self):
         self.ok = {"version": "3.0.0-beta2", "engines": {"node": ">=24"},
                    "dependencies": {"better-sqlite3": "12.11.1",
-                                    "fs-ext": "2.1.1", "diskusage-ng": "1.0.4"}}
+                                    "fs-ext": "2.1.1", "diskusage-ng": "1.0.4", "aribts": "2.1.12"}}
     def test_pinned(self):
         self.assertTrue(module.verify(self.ok, {"dependencies": self.ok["dependencies"]}))
     def test_dependency_drift(self):

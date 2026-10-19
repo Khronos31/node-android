@@ -132,3 +132,21 @@ The on-device observations are documented in [PR #4](https://github.com/Khronos3
 Android, `aribts` TS processing, TypeORM's ESM integration, the actual
 EPGStation 3 server process and mirakc connectivity, and database migrations.
 No production `dtv-android` APK has been changed.
+
+## EPGStation beta2 JavaScript dependency smoke
+
+A sixth test button exercises the **actual production**
+`aribts@2.1.12` and `diskusage-ng@1.0.4` JavaScript packages plus their
+runtime dependencies. The probe includes the relevant npm package directory
+contents inside APK assets and rejects unanticipated host native libraries.
+
+- `aribts` is required and its MPEG-2 CRC32 implementation is checked
+  against the standard vector `123456789` => `0x0376e6e7`.
+- `diskusage-ng` uses `child_process.execFile('df', ['-P', '-k', path])`
+  on POSIX; the Android app-private directory is queried on the **actual
+  device**. This establishes whether the Android `df` command, `PATH`,
+  and parser agree. If not, failures are reported rather than falsely marked
+  as passing.
+
+Successful `EPG3_JS_DEPS_PASS` is another dependency milestone, but **not**
+a claim that EPGStation 3 itself boots or connects to mirakc.

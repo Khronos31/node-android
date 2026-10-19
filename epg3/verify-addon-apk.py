@@ -25,6 +25,9 @@ with zipfile.ZipFile(apk) as package:
         "assets/epg3-modules/better-sqlite3/lib/methods/wrappers.js",
         "assets/epg3-modules/fs-ext/fs-ext.js",
         "assets/epg3-functional-smoke.js",
+        "assets/epg3-js-deps-smoke.js",
+        "assets/epg3-modules/node_modules/aribts/index.js",
+        "assets/epg3-modules/node_modules/diskusage-ng/index.js",
     ):
         if not package.read(required):
             raise SystemExit("Missing production JS/functional test: " + required)

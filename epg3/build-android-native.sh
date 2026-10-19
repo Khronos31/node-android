@@ -82,6 +82,22 @@ done
 mkdir -p "$output/js/better-sqlite3" "$output/js/fs-ext"
 cp -R "$root/node_modules/better-sqlite3/lib" "$output/js/better-sqlite3/"
 cp "$root/node_modules/fs-ext/fs-ext.js" "$output/js/fs-ext/fs-ext.js"
+
+# Include EPGStation 3 beta2's real pure-JS TS parser and disk-usage packages
+# (with their runtime transitive dependencies). No host-native binaries.
+for module in aribts crc eventemitter3 iconv-lite safer-buffer bindings file-uri-to-path diskusage-ng; do
+  src="$root/node_modules/$module"
+  if [[ ! -f "$src/package.json" ]]; then
+    echo "Expected production JS package not installed: $module" >&2; exit 7
+  fi
+  dest="$output/js/node_modules/$module"
+  mkdir -p "$dest"
+  cp -a "$src/." "$dest/"
+  if find "$dest" -type f \( -name '*.node' -o -name '*.so' \) | grep -q .; then
+    echo "Unexpected ELF/native binary in JS-only dependency: $module" >&2; exit 7
+  fi
+  echo "EPG3_PRODUCTION_JS_DEP_STAGED $abi $module"
+done
 echo "EPG3_UPSTREAM_JS_STAGED $abi"
 
 python3 "$root/verify-output.py" "$output" "$abi"

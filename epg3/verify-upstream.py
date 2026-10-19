@@ -7,7 +7,7 @@ from pathlib import Path
 
 REPO_COMMIT = "1793ab74088be8791d191c9621ab881e50741119"
 VERSION = "3.0.0-beta2"
-NAMES = ("better-sqlite3", "fs-ext", "diskusage-ng")
+NAMES = ("better-sqlite3", "fs-ext", "diskusage-ng", "aribts")
 
 def verify(upstream, local):
     if upstream.get("version") != VERSION:

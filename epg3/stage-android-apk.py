@@ -51,6 +51,12 @@ relpaths = [
     "better-sqlite3/lib/util.js",
     "better-sqlite3/lib/sqlite-error.js",
     "fs-ext/fs-ext.js",
+    "node_modules/aribts/index.js",
+    "node_modules/diskusage-ng/index.js",
+    "node_modules/crc/package.json",
+    "node_modules/eventemitter3/package.json",
+    "node_modules/iconv-lite/package.json",
+    "node_modules/safer-buffer/package.json",
 ]
 for abi in expected:
     roots = list(src.rglob(f"{abi}/js"))

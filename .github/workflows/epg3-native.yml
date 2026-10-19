@@ -99,6 +99,8 @@ jobs:
             mock-apk/.generated/assets/licenses mock-apk/.generated/assets
           node --check mock-apk/tests/js/epg3-native-smoke.js
           node --check mock-apk/tests/js/epg3-functional-smoke.js
+          node --check mock-apk/tests/js/epg3-js-deps-smoke.js
+          python3 -m unittest discover -s epg3 -p 'test_*.py' -v
           gradle -p mock-apk --no-daemon :app:assembleDebug
           apk=mock-apk/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$apk"
