@@ -9,12 +9,3 @@
            'link_settings': {
              'libraries': ['-latomic', ],
            },
-@@ -1448,6 +1448,7 @@
-             '<(V8_ROOT)/src/base/platform/platform-posix.h',
-             '<(V8_ROOT)/src/base/platform/platform-posix-time.cc',
-             '<(V8_ROOT)/src/base/platform/platform-posix-time.h',
-+            '<(V8_ROOT)/src/base/platform/platform-linux.h',
-           ],
-           'link_settings': {
-             'target_conditions': [
-

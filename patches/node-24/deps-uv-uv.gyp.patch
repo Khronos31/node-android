@@ -18,12 +18,3 @@
          'conditions': [
            ['OS == "linux"', {
              'defines': [ '_POSIX_C_SOURCE=200112' ],
-@@ -267,6 +267,7 @@
-             'src/unix/random-sysctl-linux.c',
-             'src/unix/epoll.c',
-           ],
-+          'defines': [ '__USE_GNU' ],
-           'link_settings': {
-             'libraries': [ '-ldl' ],
-           },
-
