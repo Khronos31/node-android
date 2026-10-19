@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class MainActivity extends Activity {
-    private final Button[] buttons = new Button[3];
+    private final Button[] buttons = new Button[4];
     private TextView console;
 
     private static final String TAG = "NodeMock";
@@ -64,6 +64,10 @@ public final class MainActivity extends Activity {
         buttons[2].setText("3. Native addon smoke (.node / Node-API)");
         root.addView(buttons[2]);
 
+        buttons[3] = new Button(this);
+        buttons[3].setText("4. EPG3 native ABI (better-sqlite3 / fs-ext)");
+        root.addView(buttons[3]);
+
         console = new TextView(this);
         console.setTextSize(13);
         console.setTypeface(Typeface.MONOSPACE);
@@ -82,6 +86,7 @@ public final class MainActivity extends Activity {
         buttons[0].setOnClickListener(v -> execute("version"));
         buttons[1].setOnClickListener(v -> execute("basic"));
         buttons[2].setOnClickListener(v -> execute("addon"));
+        buttons[3].setOnClickListener(v -> execute("epg3"));
         buttons[0].requestFocus();
     }
 
@@ -96,6 +101,14 @@ public final class MainActivity extends Activity {
             }
         }
         return dest;
+    }
+
+    private String requireNativeLibrary(String filename) throws Exception {
+        File library = new File(getApplicationInfo().nativeLibraryDir, filename);
+        if (!library.isFile()) {
+            throw new IllegalStateException("Missing native library: " + library);
+        }
+        return library.getAbsolutePath();
     }
 
     private String prepareAddonSymlink() throws Exception {
@@ -132,9 +145,12 @@ public final class MainActivity extends Activity {
                     args.add("--version");
                 } else if ("basic".equals(kind)) {
                     args.add(saveAsset("basic-smoke.js").getAbsolutePath());
+                } else if ("epg3".equals(kind)) {
+                    // Probe the *legacy V8 C++ addon ABI*, not only Node-API.
+                    args.add("--preserve-symlinks");
+                    args.add(saveAsset("epg3-native-smoke.js").getAbsolutePath());
                 } else {
-                    // CJS normally dereferences napi-smoke.node -> libnapi_smoke.so.
-                    // Keep the .node extension so Node uses its native addon loader.
+                    // Keep the .node extension so Node uses the native addon loader.
                     args.add("--preserve-symlinks");
                     args.add(saveAsset("native-addon-smoke.js").getAbsolutePath());
                 }
@@ -148,6 +164,11 @@ public final class MainActivity extends Activity {
                 builder.environment().put("NODE_DISABLE_COLORS", "1");
                 if ("addon".equals(kind)) {
                     builder.environment().put("NAPI_ADDON_PATH", prepareAddonSymlink());
+                } else if ("epg3".equals(kind)) {
+                    builder.environment().put("EPG3_SQLITE_NATIVE",
+                            requireNativeLibrary("libepg3_better_sqlite3.so"));
+                    builder.environment().put("EPG3_FSEXT_NATIVE",
+                            requireNativeLibrary("libepg3_fs_ext.so"));
                 }
 
                 Process process = builder.start();
@@ -180,7 +201,8 @@ public final class MainActivity extends Activity {
                 watchdog.interrupt();
                 String marker = "version".equals(kind)
                         ? VERSION_MARKER
-                        : ("basic".equals(kind) ? "NODE_BASIC_PASS" : "NODE_ADDON_PASS");
+                        : ("basic".equals(kind) ? "NODE_BASIC_PASS"
+                                : ("epg3".equals(kind) ? "EPG3_LEGACY_ADDON_PASS" : "NODE_ADDON_PASS"));
                 boolean ok = exit == 0 && !timedOut.get() && text.indexOf(marker) != -1;
 
                 output = (ok ? "PASS" : "FAIL")

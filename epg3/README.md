@@ -50,3 +50,26 @@ linking, module initialisation or SQLite functionality on Android.
 
 This workflow intentionally does not trigger the multi-hour Node.js runtime
 cross-build, and it does not run any HAOS subagents.
+
+## Dedicated real-device legacy V8 loading APK
+
+After both dependency cross-build jobs complete successfully, the same workflow
+packages their actual `better_sqlite3.node` and `fs_ext.node` binaries as
+`libepg3_better_sqlite3.so` and `libepg3_fs_ext.so` in an isolated Android
+mock APK. The **Node runtime is the previously verified own-build run
+39220534794**, *not* a third-party reference executable.
+
+The mock APK displays a new fourth button, **EPG3 native ABI**, which invokes
+`process.dlopen` directly on the two Android libraries. This deliberately
+tests the **real Node/V8 C++ symbol and addon registration compatibility**
+before introducing their JavaScript package wrappers.
+
+Expected successes are `BETTER_SQLITE3_NATIVE_LOAD_PASS`,
+`FS_EXT_NATIVE_LOAD_PASS` and `EPG3_LEGACY_ADDON_PASS`.
+A linker failure is printed as `EPG3_NATIVE_LOAD_FAILED`, with details of
+the missing symbol. **A successful load is not yet a SQLite query or a full
+EPGStation 3 execution test.**
+
+The existing standalone Node/N-API mock remains separately buildable without
+these optional native libraries. Test APKs are debug-signed and must not be
+published as production releases.
