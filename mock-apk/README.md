@@ -53,69 +53,46 @@ to verify the mock app and addon compilation. The exact archive SHA-256 is
 hardcoded in [stage-runtime.py](scripts/stage-runtime.py). This reference mode
 is a *scaffold test*, **not independent reproduction of Node.js**.
 
-For the **actual Khronos31/node-android build**, after
-[Build Node.js for Android](../.github/workflows/build.yml) has successfully
-uploaded artifacts for **both** ABIs:
+## Test our own Node.js build without merging either PR
 
-1. Open *Actions → Build Android Node N-API Mock APK → Run workflow*.
-2. Select `runtime_source: run-artifacts` and enter that successful build's
-   numeric GitHub Actions **run ID** in `runtime_run_id`.
-3. The workflow fetches both ABI build artifacts using
-   `actions/download-artifact`, verifies their embedded build metadata,
-   SHA-256, ELF class and Android program interpreter.
-4. It compiles the native N-API addon from official Node headers, creates
-   the signed **debug** APK, and uploads it as a **workflow artifact only**.
-5. Download the APK from that workflow's Artifacts section and install it.
-   No release tag or update to `dtv-android` is performed.
+GitHub Actions' `workflow_dispatch` trigger only works for workflows that
+already exist on the **default branch**. Because this workflow currently lives
+only in a draft PR, using *Run workflow* in the Actions UI is **not yet possible**.
 
-Note that the workflow generated here is intentionally **manual** for
-`run-artifacts` mode. It does not restart the long-running Node.js build,
-nor download artifacts from an unfinished or failed run.
+Instead, the PR workflow reads [`runtime-selection.json`](runtime-selection.json).
+Its default `reference` mode produces the already-tested reference-based APK.
 
-## Run locally (without HAOS dependencies)
+Once [Build Node.js for Android](../.github/workflows/build.yml) finishes
+successfully **and uploads both ABI artifacts**, change the file on the
+`feat/napi-mock-harness` branch to:
 
-On a Linux build host with Java 17, Android SDK/NDK
-`27.0.12077973`, Gradle `7.6.4`, Python 3 and `readelf`:
-
-```bash
-export ANDROID_HOME=/path/to/android/sdk
-export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
-
-# Reference-only provisional Node.js binaries (checksum verified):
-python3 mock-apk/scripts/stage-runtime.py --source reference
-bash mock-apk/scripts/build-addon.sh
-gradle -p mock-apk :app:assembleDebug
-python3 mock-apk/scripts/verify-apk.py \
-  mock-apk/app/build/outputs/apk/debug/app-debug.apk
+```json
+{
+  "source": "run-artifacts",
+  "runtime_run_id": 39220534794
+}
 ```
 
-This produces a debug-signed APK. It is not a production-signed Android build.
+The run ID above refers to the **current build attempt**. Only select it if that
+run ends successfully; use a new successful run ID if it fails. Committing the
+selection file automatically triggers this PR's short APK build without
+restarting the expensive Node.js cross-compile.
 
-## On-device validation
+The mock APK workflow first verifies the selected run completed successfully
+under `Khronos31/node-android`, then downloads **both** ABI artifacts using
+`actions/download-artifact`, and verifies source version, binary hashes,
+ELF headers and build metadata before assembling and uploading a debug-signed
+APK. It does not publish a GitHub Release or modify `dtv-android`.
 
-```bash
-# GitHub's ephemeral debug signing key changes across CI runs:
-# Remove a previously installed mock before installing a new CI APK.
-adb uninstall dev.khronos31.nodeandroid.mock || true
-adb install mock-apk/app/build/outputs/apk/debug/app-debug.apk
-adb shell getprop ro.product.cpu.abi
-adb shell getprop ro.build.version.sdk
-adb logcat -d -s NodeMock:I AndroidRuntime:E linker:E
-```
+**After** this workflow has been merged into `main`, the original manual
+`workflow_dispatch` inputs (`runtime_source: run-artifacts` and
+`runtime_run_id`) can also be used without changing the selection file.
 
-Open **Node 24 N-API Mock** on Android TV / Google TV or a phone, and press
-all three test buttons. Save the full result of failed tests (including
-`NODE_ADDON_LOAD_FAILED`, if present). Only the ABI of the current device
-is actually exercised, even though the APK contains both.
 
-For the first milestone, **do not** include EPGStation v3, sqlite3, CRC32,
-background services, FFmpeg or tuner drivers. This tests the runtime and
-module loader in isolation.
+### Release acceptance reminder
 
-## Licensing
-
-The app harness and C smoke addon are covered by this repository's MIT
-license. The embedded Node runtime and Node headers come from Node's own
-distribution; Node's official LICENSE, including third-party notices, is
-packed in APK assets. Do not use the third-party reference binary for formal
-releases without its own provenance/license verification.
+- The first successful Node-API smoke (`NODE_ADDON_PASS`) was on a physical
+  **armeabi-v7a** device using the **reference binary**, not a custom build.
+- Repeat the version, basic JS, and N-API checks with the self-built runtime.
+- A binary compiled for arm64 is not automatically proven by tests on armv7a;
+  obtain an actual arm64 on-device result before claiming both ABIs tested.
