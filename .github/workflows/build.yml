@@ -48,6 +48,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build xz-utils patch gcc-multilib g++-multilib
       - uses: android-actions/setup-android@v3
+        with:
+          # sdkmanager's old 'tools' package was removed; avoid the action default.
+          packages: platform-tools
       - name: Install pinned Android NDK
         run: |
           sdkmanager --install "ndk;27.0.12077973"
