@@ -27,7 +27,6 @@ for abi, (cls, machine) in expected.items():
     shutil.copyfile(libcxx, cpp_dst)
     # Android 16 KiB page devices use 64-bit ABIs. NDK r27 bundles a
     # 16 KiB-aligned arm64 libc++, but the 32-bit armv7 libc++ uses 4 KiB.
-    # Don't reject an otherwise valid armv7 APK for a non-applicable gate.
     if abi == "arm64-v8a":
         check_16k(cpp_dst)
     print("EPG3_STAGE_CPP_RUNTIME_OK", abi, cpp_dst.stat().st_size)
@@ -58,6 +57,12 @@ relpaths = [
     "better-sqlite3/lib/util.js",
     "better-sqlite3/lib/sqlite-error.js",
     "fs-ext/fs-ext.js",
+    "node_modules/aribts/index.js",
+    "node_modules/diskusage-ng/index.js",
+    "node_modules/crc/package.json",
+    "node_modules/eventemitter3/package.json",
+    "node_modules/iconv-lite/package.json",
+    "node_modules/safer-buffer/package.json",
 ]
 for abi in expected:
     roots = list(src.rglob(f"{abi}/js"))

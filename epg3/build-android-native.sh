@@ -47,8 +47,7 @@ export AR="$toolchain/llvm-ar"
 export GYP_DEFINES="target_arch=$arch v8_target_arch=$arch android_target_arch=$arch host_os=linux OS=android android_ndk_path=$ndk"
 export GYP_CROSSCOMPILE=1
 export npm_config_build_from_source=true
-# node-gyp's make generator uses target LDFLAGS for shared objects; NDK r27
-# otherwise emits 4 KiB PT_LOAD segments. Keep the Node 24 ABI/NDK pinned.
+# NDK r27 node-gyp GYP make target shared objects must use 16 KiB LOAD pages.
 export LDFLAGS="${LDFLAGS:-} -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 output="$root/.generated/output/$abi"
 mkdir -p "$output"
@@ -86,6 +85,22 @@ done
 mkdir -p "$output/js/better-sqlite3" "$output/js/fs-ext"
 cp -R "$root/node_modules/better-sqlite3/lib" "$output/js/better-sqlite3/"
 cp "$root/node_modules/fs-ext/fs-ext.js" "$output/js/fs-ext/fs-ext.js"
+
+# Include EPGStation 3 beta2's real pure-JS TS parser and disk-usage packages
+# (with their runtime transitive dependencies). No host-native binaries.
+for module in aribts crc eventemitter3 iconv-lite safer-buffer bindings file-uri-to-path diskusage-ng; do
+  src="$root/node_modules/$module"
+  if [[ ! -f "$src/package.json" ]]; then
+    echo "Expected production JS package not installed: $module" >&2; exit 7
+  fi
+  dest="$output/js/node_modules/$module"
+  mkdir -p "$dest"
+  cp -a "$src/." "$dest/"
+  if find "$dest" -type f \( -name '*.node' -o -name '*.so' \) | grep -q .; then
+    echo "Unexpected ELF/native binary in JS-only dependency: $module" >&2; exit 7
+  fi
+  echo "EPG3_PRODUCTION_JS_DEP_STAGED $abi $module"
+done
 echo "EPG3_UPSTREAM_JS_STAGED $abi"
 
 python3 "$root/verify-output.py" "$output" "$abi"

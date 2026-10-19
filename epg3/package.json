@@ -6,6 +6,7 @@
   "engines": {"node": ">=24"},
   "dependencies": {
     "better-sqlite3": "12.11.1",
+    "aribts": "2.1.12",
     "fs-ext": "2.1.1",
     "diskusage-ng": "1.0.4"
   },

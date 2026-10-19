@@ -133,6 +133,24 @@ Android, `aribts` TS processing, TypeORM's ESM integration, the actual
 EPGStation 3 server process and mirakc connectivity, and database migrations.
 No production `dtv-android` APK has been changed.
 
+## EPGStation beta2 JavaScript dependency smoke
+
+A sixth test button exercises the **actual production**
+`aribts@2.1.12` and `diskusage-ng@1.0.4` JavaScript packages plus their
+runtime dependencies. The probe includes the relevant npm package directory
+contents inside APK assets and rejects unanticipated host native libraries.
+
+- `aribts` is required and its MPEG-2 CRC32 implementation is checked
+  against the standard vector `123456789` => `0x0376e6e7`.
+- `diskusage-ng` uses `child_process.execFile('df', ['-P', '-k', path])`
+  on POSIX; the Android app-private directory is queried on the **actual
+  device**. This establishes whether the Android `df` command, `PATH`,
+  and parser agree. If not, failures are reported rather than falsely marked
+  as passing.
+
+Successful `EPG3_JS_DEPS_PASS` is another dependency milestone, but **not**
+a claim that EPGStation 3 itself boots or connects to mirakc.
+
 ## Android 16 KiB-page ELF safety
 
 Node + EPGStation dependency smoke tests on 4 KiB Android devices do **not**
@@ -149,3 +167,21 @@ PR #8. A fresh integrated APK must use the corrected Node binary before
 claiming that **all** native libraries are 16 KiB-aligned.
 
 This is ELF layout verification, not yet a real 16 KiB-page device test.
+
+## Full 16 KiB-aligned mock APK acceptance
+
+The 16 KiB test APK uses **new own-source-built Node 24.21.0 CI artifacts**
+from [run 39308014802](https://github.com/Khronos31/node-android/actions/runs/39308014802),
+**not** the prior 4 KiB Node build 39220534794. The mock's N-API smoke
+addon uses the linker flags from PR #8, and EPGStation beta2 native
+dependencies use the 16 KiB alignment flags from PR #4.
+
+The APK CI inspects **all** native ELF files in `lib/arm64-v8a/*.so`, including
+the actual Node executable, N-API addon, better-sqlite3, fs-ext and
+`libc++_shared.so`, rejecting any PT_LOAD alignment below 16 KiB.
+For 32-bit `armeabi-v7a`, the NDK r27 supplied `libc++_shared.so` is
+the only exception (4 KiB), and all custom armv7 native ELFs are still checked.
+
+Passing static inspection does **not** establish correct runtime on a genuine
+16 KiB page device. The user should first verify the Android 16 KiB warning
+disappears, then repeat tests 1–6, and inspect `adb shell getconf PAGE_SIZE`.

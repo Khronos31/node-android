@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class MainActivity extends Activity {
-    private final Button[] buttons = new Button[5];
+    private final Button[] buttons = new Button[6];
     private TextView console;
 
     private static final String TAG = "NodeMock";
@@ -72,6 +72,10 @@ public final class MainActivity extends Activity {
         buttons[4].setText("5. EPG3 functional (SQLite/WAL/flock)");
         root.addView(buttons[4]);
 
+        buttons[5] = new Button(this);
+        buttons[5].setText("6. EPG3 JS deps (aribts / diskusage-ng)");
+        root.addView(buttons[5]);
+
         console = new TextView(this);
         console.setTextSize(13);
         console.setTypeface(Typeface.MONOSPACE);
@@ -92,6 +96,7 @@ public final class MainActivity extends Activity {
         buttons[2].setOnClickListener(v -> execute("addon"));
         buttons[3].setOnClickListener(v -> execute("epg3"));
         buttons[4].setOnClickListener(v -> execute("epg3-functional"));
+        buttons[5].setOnClickListener(v -> execute("epg3-js"));
         buttons[0].requestFocus();
     }
 
@@ -204,6 +209,9 @@ public final class MainActivity extends Activity {
                     args.add("--version");
                 } else if ("basic".equals(kind)) {
                     args.add(saveAsset("basic-smoke.js").getAbsolutePath());
+                } else if ("epg3-js".equals(kind)) {
+                    args.add("--preserve-symlinks");
+                    args.add(saveAsset("epg3-js-deps-smoke.js").getAbsolutePath());
                 } else if ("epg3-functional".equals(kind)) {
                     args.add("--preserve-symlinks");
                     args.add(saveAsset("epg3-functional-smoke.js").getAbsolutePath());
@@ -226,6 +234,10 @@ public final class MainActivity extends Activity {
                 builder.environment().put("NODE_DISABLE_COLORS", "1");
                 if ("addon".equals(kind)) {
                     builder.environment().put("NAPI_ADDON_PATH", prepareAddonSymlink());
+                } else if ("epg3-js".equals(kind)) {
+                    builder.environment().put("EPG3_MODULES_ROOT",
+                            prepareEpg3FunctionalModules().getAbsolutePath());
+                    builder.environment().put("EPG3_DATA_DIR", getFilesDir().getAbsolutePath());
                 } else if ("epg3-functional".equals(kind)) {
                     builder.environment().put("EPG3_MODULES_ROOT",
                             prepareEpg3FunctionalModules().getAbsolutePath());
@@ -270,7 +282,8 @@ public final class MainActivity extends Activity {
                         : ("basic".equals(kind) ? "NODE_BASIC_PASS"
                                 : ("epg3".equals(kind) ? "EPG3_LEGACY_ADDON_PASS"
                                         : ("epg3-functional".equals(kind) ? "EPG3_FUNCTIONAL_PASS"
-                                                : "NODE_ADDON_PASS")));
+                                                : ("epg3-js".equals(kind) ? "EPG3_JS_DEPS_PASS"
+                                                        : "NODE_ADDON_PASS"))));
                 boolean ok = exit == 0 && !timedOut.get() && text.indexOf(marker) != -1;
 
                 output = (ok ? "PASS" : "FAIL")

@@ -77,7 +77,7 @@ jobs:
       - name: Retrieve own two-ABI Node 24.21.0 build
         uses: actions/download-artifact@v4
         with:
-          run-id: 39220534794
+          run-id: 39308014802
           pattern: node-v24.21.0-android-*
           merge-multiple: false
           path: mock-apk/.generated/run-artifacts
@@ -92,13 +92,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 mock-apk/scripts/stage-runtime.py --source run-artifacts --run-id 39220534794
+          python3 mock-apk/scripts/stage-runtime.py --source run-artifacts --run-id 39308014802
           bash mock-apk/scripts/build-addon.sh
           python3 epg3/stage-android-apk.py \
             epg3/.generated/native-artifacts mock-apk/.generated/jniLibs \
             mock-apk/.generated/assets/licenses mock-apk/.generated/assets
           node --check mock-apk/tests/js/epg3-native-smoke.js
           node --check mock-apk/tests/js/epg3-functional-smoke.js
+          node --check mock-apk/tests/js/epg3-js-deps-smoke.js
+          python3 -m unittest discover -s epg3 -p 'test_*.py' -v
           gradle -p mock-apk --no-daemon :app:assembleDebug
           apk=mock-apk/app/build/outputs/apk/debug/app-debug.apk
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$apk"
