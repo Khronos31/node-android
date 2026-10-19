@@ -1,0 +1,44 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'dev.khronos31.nodeandroid.mock'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'dev.khronos31.nodeandroid.mock'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '0.2.0'
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = [rootProject.file('.generated/jniLibs')]
+            assets.srcDirs = [
+                rootProject.file('tests/js'),
+                rootProject.file('.generated/assets')
+            ]
+        }
+    }
+
+    packagingOptions {
+        // Android 10+ forbids executing app_data_file binaries from filesDir.
+        // Executable PIE Node and the N-API .so are extracted to nativeLibraryDir.
+        jniLibs {
+            useLegacyPackaging true
+        }
+        doNotStrip '**/libnode_exec.so'
+        doNotStrip '**/libnapi_smoke.so'
+    }
+}

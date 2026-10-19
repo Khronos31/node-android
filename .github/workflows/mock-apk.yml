@@ -1,0 +1,168 @@
+name: Build Android Node N-API Mock APK
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mock-apk.yml"
+      - "mock-apk/**"
+  workflow_dispatch:
+    inputs:
+      runtime_source:
+        description: "reference = checksummed third-party proof build; run-artifacts = own node-android build"
+        required: true
+        type: choice
+        options:
+          - reference
+          - run-artifacts
+        default: reference
+      runtime_run_id:
+        description: "Successful Build Node.js for Android Actions run ID (required for run-artifacts)"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  mock-apk:
+    name: N-API mock APK (armv7a + arm64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      RUNTIME_SOURCE: ${{ inputs.runtime_source || 'reference' }}
+      RUNTIME_RUN_ID: ${{ inputs.runtime_run_id || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # workflow_dispatch cannot run until this workflow exists on main.
+      # For now a PR update to runtime-selection.json triggers the mock
+      # build and can consume an already-successful Node CI run without
+      # touching or restarting that expensive build.
+      - name: Choose runtime for PR builds
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: python3 mock-apk/scripts/select_runtime.py mock-apk/runtime-selection.json >> "$GITHUB_ENV"
+
+      - name: Validate test JS and workflow inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check mock-apk/tests/js/basic-smoke.js
+          node --check mock-apk/tests/js/native-addon-smoke.js
+          node mock-apk/tests/js/symlink-resolve-smoke.cjs
+          node --preserve-symlinks mock-apk/tests/js/symlink-resolve-smoke.cjs
+          python3 -m py_compile mock-apk/scripts/*.py
+          python3 -m unittest discover -s mock-apk/tests/python -p 'test_*.py' -v
+          bash -n mock-apk/scripts/build-addon.sh
+          if [[ "$RUNTIME_SOURCE" == "run-artifacts" ]]; then
+            [[ "$RUNTIME_RUN_ID" =~ ^[0-9]+$ ]] || {
+              echo "::error::runtime_run_id must be a GitHub Actions run ID" >&2
+              exit 2
+            }
+          elif [[ "$RUNTIME_SOURCE" != "reference" ]]; then
+            echo "::error::Unexpected runtime source: $RUNTIME_SOURCE" >&2
+            exit 2
+          elif [[ -n "$RUNTIME_RUN_ID" ]]; then
+            echo "::error::Reference mode must not contain a runtime run ID" >&2
+            exit 2
+          fi
+
+      - name: Verify selected Node build run before downloading binaries
+        if: ${{ env.RUNTIME_SOURCE == 'run-artifacts' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$TARGET_REPOSITORY/actions/runs/$RUNTIME_RUN_ID" |
+            python3 -c '
+          import json, os, sys
+          run = json.load(sys.stdin)
+          status = run.get("conclusion")
+          if status != "success":
+              sys.exit(f"Node build run must be successful, got {status!r}")
+          if run.get("name") != "Build Node.js for Android":
+              sys.exit("Selected run is not a Node.js build workflow")
+          repo = (run.get("repository") or {}).get("full_name")
+          if repo != os.environ["TARGET_REPOSITORY"]:
+              sys.exit(f"Unexpected Node build repository: {repo!r}")
+          print(f"Verified successful Node build run {run.get(chr(105) + chr(100))}")
+          '
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '7.6.4'
+
+      - uses: android-actions/setup-android@v3
+        with:
+          # Its obsolete default "tools" package no longer exists.
+          packages: platform-tools
+
+      - name: Install pinned Android SDK and NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "ndk;27.0.12077973"
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -f "$sdk/ndk/27.0.12077973/source.properties"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/27.0.12077973" >> "$GITHUB_ENV"
+
+      - name: Download our custom-built Node CI artifacts
+        if: ${{ env.RUNTIME_SOURCE == 'run-artifacts' }}
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ env.RUNTIME_RUN_ID }}
+          pattern: node-v24.21.0-android-*
+          merge-multiple: false
+          path: mock-apk/.generated/run-artifacts
+          github-token: ${{ github.token }}
+
+      - name: Stage runtimes and compile both Node-API addons
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 mock-apk/scripts/stage-runtime.py \
+            --source "$RUNTIME_SOURCE" --run-id "$RUNTIME_RUN_ID"
+          bash mock-apk/scripts/build-addon.sh
+          test -f mock-apk/.generated/assets/licenses/Node-LICENSE
+
+      - name: Compile standalone Android APK
+        shell: bash
+        run: gradle -p mock-apk --no-daemon :app:assembleDebug
+
+      - name: Verify APK structure, signature, and embedded provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="mock-apk/app/build/outputs/apk/debug/app-debug.apk"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "$apk"
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$apk" |
+            grep -E 'package:|sdkVersion:|targetSdkVersion:|native-code:'
+          python3 mock-apk/scripts/verify-apk.py "$apk"
+          if [[ "$RUNTIME_SOURCE" == "reference" ]]; then
+            label="reference"
+          else
+            label="run-$RUNTIME_RUN_ID"
+          fi
+          mkdir -p mock-apk/.generated/output
+          cp "$apk" "mock-apk/.generated/output/node24-napi-mock-$label-debug.apk"
+          cp mock-apk/.generated/assets/runtime-origin.json mock-apk/.generated/output/
+          (cd mock-apk/.generated/output && sha256sum *.apk > SHA256SUMS)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node24-napi-mock-${{ env.RUNTIME_SOURCE }}-${{ github.run_number }}
+          path: mock-apk/.generated/output/
+          retention-days: 14
+          if-no-files-found: error
