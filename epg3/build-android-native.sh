@@ -47,6 +47,8 @@ export AR="$toolchain/llvm-ar"
 export GYP_DEFINES="target_arch=$arch v8_target_arch=$arch android_target_arch=$arch host_os=linux OS=android android_ndk_path=$ndk"
 export GYP_CROSSCOMPILE=1
 export npm_config_build_from_source=true
+# NDK r27 node-gyp GYP make target shared objects must use 16 KiB LOAD pages.
+export LDFLAGS="${LDFLAGS:-} -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
 output="$root/.generated/output/$abi"
 mkdir -p "$output"
 for module in better-sqlite3 fs-ext diskusage-ng; do
@@ -71,6 +73,7 @@ for module in better-sqlite3 fs-ext diskusage-ng; do
     [[ "$head" == *"Class:"*"$cls"* && "$head" == *"Machine:"*"$machine"* ]] || {
       echo "Incorrect ELF ABI for $module: $dest" >&2; exit 5;
     }
+    python3 "$root/check_pages.py" "$dest"
     echo "NATIVE_ADDON_BUILT $abi $module $dest"
     count=$((count + 1))
   done < <(find "$dir/build/Release" -type f -name '*.node' -print0)

@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from check_pages import check_16k
 
 folder = Path(sys.argv[1])
 abi = sys.argv[2]
@@ -25,6 +26,7 @@ for module in modules:
             raise SystemExit("ELF architecture check failed: " + str(file))
         if not re.search(r"Type:\s+DYN", info):
             raise SystemExit("Native addon must be shared ELF: " + str(file))
+        check_16k(file)
         files.append({
             "name": file.name, "bytes": file.stat().st_size,
             "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
